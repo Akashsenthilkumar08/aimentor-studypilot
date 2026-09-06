@@ -492,6 +492,8 @@ async function start() {
   app.listen(PORT, "0.0.0.0", () => {
     console.log(`StudyPilot AI server running on port ${PORT}`);
   });
+}
+
 export default app;
 
 if (!process.env.VERCEL) {
