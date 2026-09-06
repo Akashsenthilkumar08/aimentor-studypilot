@@ -1,0 +1,126 @@
+{
+  "entities": {
+    "UserProfile": {
+      "title": "User Profile",
+      "description": "Student profile metadata and overall progress metrics.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "email": { "type": "string" },
+        "displayName": { "type": "string" },
+        "streakDays": { "type": "number" },
+        "totalStudyMinutes": { "type": "number" },
+        "totalQuizzesTaken": { "type": "number" },
+        "xpPoints": { "type": "number" },
+        "currentCycleStep": { "type": "string" }
+      },
+      "required": ["id", "email", "displayName"]
+    },
+    "StudyPlan": {
+      "title": "Study Plan",
+      "description": "User created adaptive study plan containing modules and topics.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "userId": { "type": "string" },
+        "title": { "type": "string" },
+        "subject": { "type": "string" },
+        "description": { "type": "string" },
+        "level": { "type": "string" },
+        "targetDate": { "type": "string" },
+        "estimatedHours": { "type": "number" },
+        "progressPercent": { "type": "number" },
+        "status": { "type": "string" },
+        "createdAt": { "type": "string" }
+      },
+      "required": ["id", "userId", "title", "subject"]
+    },
+    "QuizResult": {
+      "title": "Quiz Result",
+      "description": "Diagnostic quiz results taken by the student.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "userId": { "type": "string" },
+        "topic": { "type": "string" },
+        "difficulty": { "type": "string" },
+        "totalQuestions": { "type": "number" },
+        "correctCount": { "type": "number" },
+        "scorePercent": { "type": "number" },
+        "passed": { "type": "boolean" },
+        "createdAt": { "type": "string" }
+      },
+      "required": ["id", "userId", "topic", "scorePercent"]
+    },
+    "LearningSession": {
+      "title": "Learning Session",
+      "description": "Log of student topic study sessions.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "userId": { "type": "string" },
+        "topic": { "type": "string" },
+        "subject": { "type": "string" },
+        "durationMinutes": { "type": "number" },
+        "notes": { "type": "string" },
+        "completedAt": { "type": "string" }
+      },
+      "required": ["id", "userId", "topic", "durationMinutes"]
+    },
+    "TeachBackSession": {
+      "title": "Teach Back Session",
+      "description": "Feynman technique evaluation of a student explanation.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "userId": { "type": "string" },
+        "topic": { "type": "string" },
+        "targetConcept": { "type": "string" },
+        "studentExplanation": { "type": "string" },
+        "score": { "type": "number" },
+        "verdict": { "type": "string" },
+        "createdAt": { "type": "string" }
+      },
+      "required": ["id", "userId", "topic", "score", "studentExplanation"]
+    },
+    "TopicProgress": {
+      "title": "Topic Progress",
+      "description": "Granular topic completion and mastery tracking.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "userId": { "type": "string" },
+        "topicName": { "type": "string" },
+        "completed": { "type": "boolean" },
+        "updatedAt": { "type": "string" }
+      },
+      "required": ["id", "userId", "topicName", "completed"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": "UserProfile",
+      "description": "User profile document"
+    },
+    "/users/{userId}/studyPlans/{planId}": {
+      "schema": "StudyPlan",
+      "description": "Student created study plans"
+    },
+    "/users/{userId}/quizResults/{quizId}": {
+      "schema": "QuizResult",
+      "description": "Diagnostic quiz submissions and scores"
+    },
+    "/users/{userId}/learningSessions/{sessionId}": {
+      "schema": "LearningSession",
+      "description": "Logged topic study sessions"
+    },
+    "/users/{userId}/teachBack/{sessionId}": {
+      "schema": "TeachBackSession",
+      "description": "Evaluated Feynman teach-back sessions"
+    },
+    "/users/{userId}/progress/{topicId}": {
+      "schema": "TopicProgress",
+      "description": "Topic completion and progress records"
+    }
+  }
+}

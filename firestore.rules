@@ -1,0 +1,77 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Helper functions
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() > 0 && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    // Default deny for anything not explicitly matched
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // User profiles
+    match /users/{userId} {
+      allow get: if isOwner(userId);
+      allow list: if false; // Users cannot list other users
+      allow create: if isOwner(userId) && isValidId(userId);
+      allow update: if isOwner(userId) && isValidId(userId);
+      allow delete: if false;
+
+      // Study Plans
+      match /studyPlans/{planId} {
+        allow get, list: if isOwner(userId);
+        allow create, update: if isOwner(userId) && isValidId(planId);
+        allow delete: if isOwner(userId) && isValidId(planId);
+      }
+
+      // Weak Topics Radar
+      match /weakTopics/{topicId} {
+        allow get, list: if isOwner(userId);
+        allow create, update: if isOwner(userId) && isValidId(topicId);
+        allow delete: if isOwner(userId) && isValidId(topicId);
+      }
+
+      // Practice Quiz Diagnostic Results
+      match /quizResults/{quizId} {
+        allow get, list: if isOwner(userId);
+        allow create: if isOwner(userId) && isValidId(quizId);
+        allow update: if isOwner(userId) && isValidId(quizId);
+        allow delete: if isOwner(userId) && isValidId(quizId);
+      }
+
+      // Teach Back Feynman Evaluations
+      match /teachBackSessions/{sessionId} {
+        allow get, list: if isOwner(userId);
+        allow create: if isOwner(userId) && isValidId(sessionId);
+        allow update: if isOwner(userId) && isValidId(sessionId);
+        allow delete: if isOwner(userId) && isValidId(sessionId);
+      }
+
+      // Learning Sessions / Active Concept Studies
+      match /learningSessions/{sessionId} {
+        allow get, list: if isOwner(userId);
+        allow create: if isOwner(userId) && isValidId(sessionId);
+        allow update: if isOwner(userId) && isValidId(sessionId);
+        allow delete: if isOwner(userId) && isValidId(sessionId);
+      }
+
+      // AI Assistant Conversations & Chat History
+      match /conversations/{conversationId} {
+        allow get, list: if isOwner(userId);
+        allow create, update: if isOwner(userId) && isValidId(conversationId);
+        allow delete: if isOwner(userId) && isValidId(conversationId);
+      }
+    }
+  }
+}
