@@ -52,9 +52,6 @@ export const Sidebar: React.FC<SidebarProps> = ({
     }
   ];
 
-  const streakDays = userProfile?.streakDays ?? 0;
-  // Create 5 segmented bars for the geometric streak tracker
-  const streakSegments = [1, 2, 3, 4, 5];
 
   return (
     <aside className="w-64 bg-slate-900 text-white flex flex-col h-full border-r border-slate-800 shrink-0 select-none">
@@ -121,30 +118,9 @@ export const Sidebar: React.FC<SidebarProps> = ({
         })}
       </nav>
 
-      {/* Theme Toggle & Study Streak */}
+      {/* Theme Toggle */}
       <div className="p-4 border-t border-slate-800 space-y-3">
         <ThemeToggle variant="sidebar" id="sidebar-theme-toggle" />
-
-        <div className="bg-slate-800 p-4 rounded-xl border border-slate-700/50">
-          <div className="flex items-center justify-between mb-2">
-            <p className="text-xs text-slate-400 uppercase font-bold tracking-wider">Study Streak</p>
-            <span className="text-xs font-semibold text-amber-400">🔥 Active</span>
-          </div>
-
-          {/* Segmented Streak Pill Bar */}
-          <div className="flex gap-1 mb-2">
-            {streakSegments.map(seg => (
-              <div
-                key={seg}
-                className={`h-2 flex-1 rounded-full transition-all ${
-                  seg <= Math.min(streakDays, 5) ? 'bg-indigo-500' : 'bg-slate-600'
-                }`}
-              />
-            ))}
-          </div>
-
-          <p className="text-sm font-medium text-white">{streakDays} days strong</p>
-        </div>
 
         {/* User Mini Bar / Logout */}
         <div className="mt-3 pt-3 border-t border-slate-800 flex items-center justify-between text-xs text-slate-400">
