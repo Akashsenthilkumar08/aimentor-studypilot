@@ -20,6 +20,7 @@ import {
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { useLearningData } from '../../context/LearningDataContext';
+import { ActivityHeatmap } from './ActivityHeatmap';
 
 interface DashboardProps {
   onOpenNewPlan: () => void;
@@ -46,6 +47,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
     recentQuizzes,
     teachBackSessions,
     learningSessions,
+    userActivities,
     toggleTopicCompletion,
     currentCycleStep,
     setCurrentCycleStep
@@ -185,6 +187,17 @@ export const Dashboard: React.FC<DashboardProps> = ({
           </div>
         </div>
       )}
+
+      {/* Real-Time GitHub-Style Activity Heatmap & Streak Tracker */}
+      <section id="activity-heatmap-section">
+        <ActivityHeatmap
+          activities={userActivities}
+          onOpenNewPlan={onOpenNewPlan}
+          onOpenQuiz={() => onOpenQuiz(nextReadyTopic || undefined)}
+          onOpenTeachBack={() => onOpenTeachBack(topWeakTopic?.topicName || nextReadyTopic || undefined)}
+          onOpenLearnTopic={() => onOpenLearnTopic(nextReadyTopic || undefined)}
+        />
+      </section>
 
       {/* 12-Column Geometric Balance Grid */}
       <section className="grid grid-cols-1 lg:grid-cols-12 gap-6">

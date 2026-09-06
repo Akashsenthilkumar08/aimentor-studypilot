@@ -12,6 +12,7 @@ import {
 import { db } from '../lib/firebase';
 import { handleFirestoreError, OperationType } from '../lib/firestoreErrors';
 import { useAuth } from './AuthContext';
+import { toLocalDateStr } from '../lib/heatmapUtils';
 import {
   StudyPlan,
   WeakTopic,
@@ -20,7 +21,8 @@ import {
   LearningCycleStep,
   TeachBackSession,
   LearningSession,
-  ChatConversation
+  ChatConversation,
+  UserActivityLog
 } from '../types';
 
 interface LearningDataContextType {
@@ -31,6 +33,7 @@ interface LearningDataContextType {
   recommendations: Recommendation[];
   teachBackSessions: TeachBackSession[];
   learningSessions: LearningSession[];
+  userActivities: UserActivityLog[];
   conversations: ChatConversation[];
   currentCycleStep: LearningCycleStep;
   setCurrentCycleStep: (step: LearningCycleStep) => void;
@@ -40,6 +43,7 @@ interface LearningDataContextType {
   addQuizResult: (quiz: Omit<Quiz, 'id' | 'userId' | 'createdAt'>) => Promise<Quiz>;
   addTeachBackSession: (session: Omit<TeachBackSession, 'id' | 'userId' | 'createdAt'>) => Promise<TeachBackSession>;
   addLearningSession: (session: { topic: string; subject?: string; durationMinutes: number; notes?: string }) => Promise<LearningSession>;
+  logActivity: (act: { type: UserActivityLog['type']; title: string; description?: string }) => Promise<void>;
   resolveWeakTopic: (id: string) => Promise<void>;
   refreshRecommendations: () => void;
   saveConversation: (conv: ChatConversation) => Promise<void>;
@@ -62,6 +66,7 @@ export const LearningDataProvider: React.FC<{ children: React.ReactNode }> = ({ 
   const [recentQuizzes, setRecentQuizzes] = useState<Quiz[]>([]);
   const [teachBackSessions, setTeachBackSessions] = useState<TeachBackSession[]>([]);
   const [learningSessions, setLearningSessions] = useState<LearningSession[]>([]);
+  const [firestoreActivities, setFirestoreActivities] = useState<UserActivityLog[]>([]);
   const [conversations, setConversations] = useState<ChatConversation[]>([]);
   const [currentCycleStep, setCurrentCycleStep] = useState<LearningCycleStep>('study');
   const [loading, setLoading] = useState(true);
@@ -91,6 +96,7 @@ export const LearningDataProvider: React.FC<{ children: React.ReactNode }> = ({ 
       setRecentQuizzes([]);
       setTeachBackSessions([]);
       setLearningSessions([]);
+      setFirestoreActivities([]);
       setConversations([]);
       setLoading(false);
       return;
@@ -241,10 +247,130 @@ export const LearningDataProvider: React.FC<{ children: React.ReactNode }> = ({ 
       handleFirestoreError(err, OperationType.LIST, convPath);
     }
 
+    // 7. Activities Listener (Real-Time Firestore Activity Stream)
+    const actPath = `users/${userId}/activities`;
+    try {
+      const actRef = collection(db, 'users', userId, 'activities');
+      const unsubAct = onSnapshot(
+        actRef,
+        snapshot => {
+          const loaded: UserActivityLog[] = [];
+          snapshot.forEach(docSnap => {
+            loaded.push({ ...(docSnap.data() as UserActivityLog), id: docSnap.id });
+          });
+          loaded.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
+          setFirestoreActivities(loaded);
+        },
+        err => {
+          console.warn('Real-time activities listener warning:', err);
+        }
+      );
+      unsubs.push(unsubAct);
+    } catch (err) {
+      handleFirestoreError(err, OperationType.LIST, actPath);
+    }
+
     return () => {
       unsubs.forEach(unsub => unsub());
     };
   }, [userId]);
+
+  // Consolidate real-time Firestore activities with derived activities for complete user history
+  const userActivities: UserActivityLog[] = useMemo(() => {
+    const combinedMap = new Map<string, UserActivityLog>();
+
+    // 1. Direct Firestore activity records
+    firestoreActivities.forEach(act => {
+      combinedMap.set(act.id, act);
+    });
+
+    // 2. Derive from learning sessions
+    learningSessions.forEach(ls => {
+      const id = `ls-act-${ls.id}`;
+      if (!combinedMap.has(id)) {
+        combinedMap.set(id, {
+          id,
+          userId: ls.userId || userId || '',
+          type: 'session',
+          title: `Study Session: ${ls.topic}`,
+          description: `Completed ${ls.durationMinutes}m of focused study on ${ls.subject || 'General'}.`,
+          timestamp: ls.completedAt,
+          dateStr: toLocalDateStr(ls.completedAt)
+        });
+      }
+    });
+
+    // 3. Derive from quiz results
+    recentQuizzes.forEach(q => {
+      const id = `quiz-act-${q.id}`;
+      if (!combinedMap.has(id)) {
+        combinedMap.set(id, {
+          id,
+          userId: q.userId || userId || '',
+          type: 'quiz',
+          title: `Diagnostic Quiz: ${q.topic}`,
+          description: `Scored ${q.scorePercent}% (${q.correctCount}/${q.totalQuestions} correct) on ${q.difficulty} difficulty.`,
+          timestamp: q.createdAt,
+          dateStr: toLocalDateStr(q.createdAt)
+        });
+      }
+    });
+
+    // 4. Derive from teach back sessions
+    teachBackSessions.forEach(tb => {
+      const id = `tb-act-${tb.id}`;
+      if (!combinedMap.has(id)) {
+        combinedMap.set(id, {
+          id,
+          userId: tb.userId || userId || '',
+          type: 'teach_back',
+          title: `Teach Back: ${tb.topic}`,
+          description: `Achieved ${tb.score}% Feynman comprehension score. ${tb.verdict}`,
+          timestamp: tb.createdAt,
+          dateStr: toLocalDateStr(tb.createdAt)
+        });
+      }
+    });
+
+    // 5. Derive from study plans created
+    studyPlans.forEach(p => {
+      const id = `plan-act-${p.id}`;
+      if (!combinedMap.has(id)) {
+        combinedMap.set(id, {
+          id,
+          userId: p.userId || userId || '',
+          type: 'plan',
+          title: `Created Roadmap: ${p.title}`,
+          description: `Targeting ${p.subject} syllabus (${p.level} level).`,
+          timestamp: p.createdAt,
+          dateStr: toLocalDateStr(p.createdAt)
+        });
+      }
+
+      p.modules?.forEach(mod => {
+        mod.topics?.forEach(t => {
+          if (t.completed) {
+            const tId = `topic-act-${p.id}-${t.id}`;
+            if (!combinedMap.has(tId)) {
+              combinedMap.set(tId, {
+                id: tId,
+                userId: p.userId || userId || '',
+                type: 'task',
+                title: `Completed Topic: ${t.name}`,
+                description: `Mastered topic under ${mod.title}.`,
+                timestamp: p.createdAt,
+                dateStr: toLocalDateStr(p.createdAt)
+              });
+            }
+          }
+        });
+      });
+    });
+
+    const list = Array.from(combinedMap.values());
+    list.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
+    return list;
+  }, [firestoreActivities, learningSessions, recentQuizzes, teachBackSessions, studyPlans, userId]);
 
   // Dynamically calculate recommendations strictly based on actual user activity
   const recommendations: Recommendation[] = useMemo(() => {
@@ -340,6 +466,33 @@ export const LearningDataProvider: React.FC<{ children: React.ReactNode }> = ({ 
     setCurrentCycleStep(CYCLE_ORDER[nextIndex]);
   };
 
+  const logActivity = async (act: {
+    type: UserActivityLog['type'];
+    title: string;
+    description?: string;
+  }) => {
+    const currentUserId = userId || 'user-' + Date.now();
+    const actId = 'act-' + Date.now() + '-' + Math.random().toString(36).substring(2, 7);
+    const now = new Date();
+    const dateStr = toLocalDateStr(now);
+    const newActivity: UserActivityLog = {
+      id: actId,
+      userId: currentUserId,
+      type: act.type,
+      title: act.title,
+      description: act.description || '',
+      timestamp: now.toISOString(),
+      dateStr
+    };
+
+    try {
+      const actRef = doc(db, 'users', currentUserId, 'activities', actId);
+      await setDoc(actRef, newActivity);
+    } catch (e) {
+      console.warn('Could not persist activity log to Firestore:', e);
+    }
+  };
+
   const toggleTopicCompletion = async (moduleId: string, topicId: string) => {
     if (!activeStudyPlan || !userId) return;
 
@@ -404,6 +557,14 @@ export const LearningDataProvider: React.FC<{ children: React.ReactNode }> = ({ 
         completed: toggledState,
         updatedAt: new Date().toISOString()
       }, { merge: true });
+
+      if (toggledState) {
+        await logActivity({
+          type: 'task',
+          title: `Completed Topic: ${toggledTopicName}`,
+          description: `Mastered milestone in ${activeStudyPlan.title}`
+        });
+      }
     } catch (e) {
       console.warn('Firestore topic completion update warning:', e);
     }
@@ -430,6 +591,12 @@ export const LearningDataProvider: React.FC<{ children: React.ReactNode }> = ({ 
     try {
       const planRef = doc(db, 'users', currentUserId, 'studyPlans', newId);
       await setDoc(planRef, newPlan);
+
+      await logActivity({
+        type: 'plan',
+        title: `Created Roadmap: ${planData.title}`,
+        description: `Targeting ${planData.subject} syllabus (${planData.level} level).`
+      });
     } catch (e) {
       console.warn('Could not save study plan to Firestore:', e);
     }
@@ -454,6 +621,12 @@ export const LearningDataProvider: React.FC<{ children: React.ReactNode }> = ({ 
     try {
       const quizRef = doc(db, 'users', currentUserId, 'quizResults', newId);
       await setDoc(quizRef, newQuiz);
+
+      await logActivity({
+        type: 'quiz',
+        title: `Diagnostic Quiz: ${quizData.topic}`,
+        description: `Scored ${quizData.scorePercent}% (${quizData.correctCount}/${quizData.totalQuestions} correct) on ${quizData.difficulty} difficulty.`
+      });
     } catch (e) {
       console.warn('Could not save quiz result to Firestore:', e);
     }
@@ -510,6 +683,12 @@ export const LearningDataProvider: React.FC<{ children: React.ReactNode }> = ({ 
     try {
       const tbRef = doc(db, 'users', currentUserId, 'teachBackSessions', newId);
       await setDoc(tbRef, newSession);
+
+      await logActivity({
+        type: 'teach_back',
+        title: `Teach Back: ${sessionData.topic}`,
+        description: `Achieved ${sessionData.score}% Feynman comprehension score. ${sessionData.verdict}`
+      });
     } catch (e) {
       console.warn('Could not persist teach-back session to Firestore:', e);
     }
@@ -569,6 +748,12 @@ export const LearningDataProvider: React.FC<{ children: React.ReactNode }> = ({ 
     try {
       const lsRef = doc(db, 'users', currentUserId, 'learningSessions', newId);
       await setDoc(lsRef, newSession);
+
+      await logActivity({
+        type: 'session',
+        title: `Study Session: ${session.topic}`,
+        description: `Completed ${session.durationMinutes}m of focused study on ${session.subject || 'General'}.`
+      });
     } catch (e) {
       console.warn('Could not persist learning session to Firestore:', e);
     }
@@ -656,6 +841,7 @@ export const LearningDataProvider: React.FC<{ children: React.ReactNode }> = ({ 
         recommendations,
         teachBackSessions,
         learningSessions,
+        userActivities,
         conversations,
         currentCycleStep,
         setCurrentCycleStep,
@@ -665,6 +851,7 @@ export const LearningDataProvider: React.FC<{ children: React.ReactNode }> = ({ 
         addQuizResult,
         addTeachBackSession,
         addLearningSession,
+        logActivity,
         resolveWeakTopic,
         refreshRecommendations,
         saveConversation,

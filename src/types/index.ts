@@ -167,3 +167,14 @@ export interface ChatConversation {
   pinned?: boolean;
 }
 
+export interface UserActivityLog {
+  id: string;
+  userId: string;
+  type: 'session' | 'quiz' | 'task' | 'teach_back' | 'plan';
+  title: string;
+  description?: string;
+  timestamp: string; // ISO string e.g. "2026-09-06T12:00:00.000Z"
+  dateStr: string;   // Local date string YYYY-MM-DD
+}
+
+
